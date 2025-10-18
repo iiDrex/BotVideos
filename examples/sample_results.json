@@ -1,0 +1,171 @@
+[
+  {
+    "titulo": "Bosque tranquilo al amanecer",
+    "enlace": "https://youtube.com/watch?v=abc123",
+    "id": "abc123",
+    "platform": "youtube",
+    "duracion_sec": 45,
+    "width": 1080,
+    "height": 1920,
+    "resolution": "1080x1920",
+    "processed_at": "2024-01-15T10:30:12Z",
+    "estado": "aceptado",
+    "razones": [],
+    "raw_metadata": {
+      "duration": 45,
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "title": "Bosque tranquilo al amanecer",
+      "uploader": "NatureVideos",
+      "view_count": 15000
+    },
+    "analysis": {
+      "analysis_time_ms": 12345,
+      "face_details": [],
+      "text_details": []
+    }
+  },
+  {
+    "titulo": "Persona caminando por el parque",
+    "enlace": "https://youtube.com/watch?v=def456",
+    "id": "def456",
+    "platform": "youtube",
+    "duracion_sec": 50,
+    "width": 1080,
+    "height": 1920,
+    "resolution": "1080x1920",
+    "processed_at": "2024-01-15T10:31:50Z",
+    "estado": "descartado",
+    "razones": ["rostro detectado"],
+    "raw_metadata": {
+      "duration": 50,
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "title": "Persona caminando por el parque",
+      "uploader": "CityLife",
+      "view_count": 8500
+    },
+    "analysis": {
+      "analysis_time_ms": 5432,
+      "face_details": [
+        {
+          "frame": 12,
+          "bbox": [200, 150, 300, 400],
+          "confidence": 0.88,
+          "class": "face"
+        }
+      ],
+      "text_details": []
+    }
+  },
+  {
+    "titulo": "Video con subtítulos explicativos",
+    "enlace": "https://youtube.com/watch?v=ghi789",
+    "id": "ghi789",
+    "platform": "youtube",
+    "duracion_sec": 60,
+    "width": 1080,
+    "height": 1920,
+    "resolution": "1080x1920",
+    "processed_at": "2024-01-15T10:33:15Z",
+    "estado": "descartado",
+    "razones": ["texto detectado"],
+    "raw_metadata": {
+      "duration": 60,
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "title": "Video con subtítulos explicativos",
+      "uploader": "EduVideos",
+      "view_count": 12000
+    },
+    "analysis": {
+      "analysis_time_ms": 8765,
+      "face_details": [],
+      "text_details": [
+        {
+          "frame": 8,
+          "text": "Tutorial paso a paso",
+          "bbox": [100, 1600, 800, 100],
+          "confidence": 0.92,
+          "method": "tesseract"
+        }
+      ]
+    }
+  },
+  {
+    "titulo": "Paisaje montañoso sin personas",
+    "enlace": "https://youtube.com/watch?v=jkl012",
+    "id": "jkl012",
+    "platform": "youtube",
+    "duracion_sec": 75,
+    "width": 1080,
+    "height": 1920,
+    "resolution": "1080x1920",
+    "processed_at": "2024-01-15T10:35:20Z",
+    "estado": "aceptado",
+    "razones": [],
+    "raw_metadata": {
+      "duration": 75,
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "title": "Paisaje montañoso sin personas",
+      "uploader": "MountainViews",
+      "view_count": 25000
+    },
+    "analysis": {
+      "analysis_time_ms": 15678,
+      "face_details": [],
+      "text_details": []
+    }
+  },
+  {
+    "titulo": "Video horizontal rechazado",
+    "enlace": "https://youtube.com/watch?v=mno345",
+    "id": "mno345",
+    "platform": "youtube",
+    "duracion_sec": 40,
+    "width": 1920,
+    "height": 1080,
+    "resolution": "1920x1080",
+    "processed_at": "2024-01-15T10:36:45Z",
+    "estado": "descartado",
+    "razones": ["orientacion horizontal"],
+    "raw_metadata": {
+      "duration": 40,
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "title": "Video horizontal rechazado",
+      "uploader": "LandscapeVids",
+      "view_count": 5000
+    },
+    "analysis": {}
+  },
+  {
+    "titulo": "Video muy corto",
+    "enlace": "https://youtube.com/watch?v=pqr678",
+    "id": "pqr678",
+    "platform": "youtube",
+    "duracion_sec": 15,
+    "width": 1080,
+    "height": 1920,
+    "resolution": "1080x1920",
+    "processed_at": "2024-01-15T10:37:30Z",
+    "estado": "descartado",
+    "razones": ["duracion fuera de rango"],
+    "raw_metadata": {
+      "duration": 15,
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "title": "Video muy corto",
+      "uploader": "ShortClips",
+      "view_count": 2000
+    },
+    "analysis": {}
+  }
+]
