@@ -50,29 +50,28 @@ class VideoDownloader:
             filename = f"temp_video_{timestamp}.%(ext)s"
             output_path = os.path.join(self.temp_dir, filename)
             
-            # Construir comando yt-dlp
+            # Construir comando yt-dlp ULTRA OPTIMIZADO para velocidad máxima
             cmd = [
                 'yt-dlp',
                 '--output', output_path,
-                '--format', 'best',  # Dejar elegir el mejor para shorts
+                '--format', 'worst[height<=480]',  # ULTRA BAJA RESOLUCIÓN para velocidad máxima
                 '--no-playlist',
                 '--no-warnings',
-                '--quiet'
+                '--quiet',
+                '--ignore-errors',
+                '--no-check-certificate',
+                '--concurrent-fragments', '1',  # Un fragmento a la vez para velocidad
+                '--fragment-retries', '1',  # Menos reintentos
+                '--retries', '1',  # Menos reintentos
+                '--socket-timeout', '10',  # Timeout más corto
+                '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             ]
             
             # Agregar límite de duración si se especifica
             if max_duration:
-                cmd.extend(['--max-duration', str(max_duration)])
+                cmd.extend(['--match-filter', f'duration <= {max_duration}'])
             else:
-                cmd.extend(['--max-duration', str(MAX_DURATION)])
-            
-            # Agregar opciones adicionales
-            for key, value in YT_DLP_OPTIONS.items():
-                if isinstance(value, bool) and value:
-                    cmd.append(f'--{key}')
-                elif not isinstance(value, bool):
-                    cmd.append(f'--{key}')
-                    cmd.append(str(value))
+                cmd.extend(['--match-filter', f'duration <= {MAX_DURATION}'])
             
             cmd.append(url)
             
@@ -88,20 +87,20 @@ class VideoDownloader:
             # Buscar el archivo descargado
             downloaded_file = self._find_downloaded_file(output_path)
             if downloaded_file and os.path.exists(downloaded_file):
-                console.print(f"    [green]✓ Descargado: {os.path.basename(downloaded_file)}[/green]")
+                console.print(f"    [green]OK - Descargado: {os.path.basename(downloaded_file)}[/green]")
                 return downloaded_file
             else:
-                console.print(f"    [red]✗ No se pudo encontrar el archivo descargado[/red]")
+                console.print(f"    [red]ERROR - No se pudo encontrar el archivo descargado[/red]")
                 return None
                 
         except subprocess.TimeoutExpired:
-            console.print(f"    [red]✗ Timeout en descarga[/red]")
+            console.print(f"    [red]ERROR - Timeout en descarga[/red]")
             return None
         except subprocess.CalledProcessError as e:
-            console.print(f"    [red]✗ Error en descarga: {e}[/red]")
+            console.print(f"    [red]ERROR - Error en descarga: {e}[/red]")
             return None
         except Exception as e:
-            console.print(f"    [red]✗ Error inesperado: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error inesperado: {str(e)}[/red]")
             return None
         finally:
             # Delay entre descargas
@@ -151,14 +150,14 @@ class VideoDownloader:
             # Buscar el archivo descargado
             downloaded_file = self._find_downloaded_file(output_path)
             if downloaded_file and os.path.exists(downloaded_file):
-                console.print(f"    [green]✓ Sección descargada: {os.path.basename(downloaded_file)}[/green]")
+                console.print(f"    [green]OK - Sección descargada: {os.path.basename(downloaded_file)}[/green]")
                 return downloaded_file
             else:
-                console.print(f"    [red]✗ No se pudo encontrar la sección descargada[/red]")
+                console.print(f"    [red]ERROR - No se pudo encontrar la sección descargada[/red]")
                 return None
                 
         except Exception as e:
-            console.print(f"    [red]✗ Error descargando sección: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error descargando sección: {str(e)}[/red]")
             return None
     
     def download_thumbnail(self, url: str) -> Optional[str]:
@@ -203,14 +202,14 @@ class VideoDownloader:
             # Buscar el thumbnail descargado
             thumbnail_file = self._find_downloaded_file(output_path)
             if thumbnail_file and os.path.exists(thumbnail_file):
-                console.print(f"    [green]✓ Thumbnail descargado: {os.path.basename(thumbnail_file)}[/green]")
+                console.print(f"    [green]OK - Thumbnail descargado: {os.path.basename(thumbnail_file)}[/green]")
                 return thumbnail_file
             else:
-                console.print(f"    [red]✗ No se pudo encontrar el thumbnail[/red]")
+                console.print(f"    [red]ERROR - No se pudo encontrar el thumbnail[/red]")
                 return None
                 
         except Exception as e:
-            console.print(f"    [red]✗ Error descargando thumbnail: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error descargando thumbnail: {str(e)}[/red]")
             return None
     
     def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
@@ -244,7 +243,7 @@ class VideoDownloader:
             return json.loads(result.stdout)
             
         except Exception as e:
-            console.print(f"    [red]✗ Error obteniendo info: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error obteniendo info: {str(e)}[/red]")
             return None
     
     def remove(self, file_path: str) -> bool:
@@ -260,11 +259,11 @@ class VideoDownloader:
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                console.print(f"    [yellow]🗑️  Eliminado: {os.path.basename(file_path)}[/yellow]")
+                console.print(f"    [yellow]DELETED  Eliminado: {os.path.basename(file_path)}[/yellow]")
                 return True
             return False
         except Exception as e:
-            console.print(f"    [red]✗ Error eliminando archivo: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error eliminando archivo: {str(e)}[/red]")
             return False
     
     def cleanup(self) -> int:
@@ -286,12 +285,12 @@ class VideoDownloader:
                         continue
             
             if count > 0:
-                console.print(f"    [yellow]🗑️  Limpiados {count} archivos temporales[/yellow]")
+                console.print(f"    [yellow]DELETED  Limpiados {count} archivos temporales[/yellow]")
             
             return count
             
         except Exception as e:
-            console.print(f"    [red]✗ Error en limpieza: {str(e)}[/red]")
+            console.print(f"    [red]ERROR - Error en limpieza: {str(e)}[/red]")
             return 0
     
     def _find_downloaded_file(self, output_pattern: str) -> Optional[str]:

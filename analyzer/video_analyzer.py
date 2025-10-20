@@ -93,6 +93,109 @@ class EnhancedVideoAnalyzer:
             console.print(f"    [red]✗ Error analizando video: {str(e)}[/red]")
             return self._create_error_result(str(e))
     
+    def analyze_video_optimized(self, path: str, filters: dict) -> Dict:
+        """
+        Analiza un video con flujo optimizado de filtros - descarta inmediatamente si no pasa un filtro
+        
+        Args:
+            path: Ruta al archivo de video
+            filters: Diccionario con filtros activos
+            
+        Returns:
+            Diccionario con resultados del análisis o descarte inmediato
+        """
+        start_time = time.time()
+        
+        try:
+            console.print(f"    [blue]Analizando video: {os.path.basename(path)}[/blue]")
+            
+            # Verificar que el archivo existe
+            if not os.path.exists(path):
+                return {
+                    'estado': 'descartado',
+                    'razones': ['archivo no encontrado'],
+                    'analysis_time_ms': 0
+                }
+            
+            # Obtener información del video
+            video_info = self._get_video_info(path)
+            if not video_info:
+                return {
+                    'estado': 'descartado',
+                    'razones': ['error obteniendo información'],
+                    'analysis_time_ms': 0
+                }
+            
+            # Calcular estrategia de muestreo
+            sample_strategy = self._calculate_sample_strategy(video_info['duration'])
+            
+            # FILTRO 1: Análisis de rostros (si está activo)
+            if filters.get('faces', True):
+                console.print("    [blue]Detectando rostros...[/blue]")
+                face_analysis = self._analyze_faces(path, sample_strategy)
+                
+                if face_analysis.get('has_face', False):
+                    # DESCARTO INMEDIATO - no procesar texto
+                    analysis_time = int((time.time() - start_time) * 1000)
+                    console.print("    [yellow]⚠️  Rostros detectados - DESCARTANDO INMEDIATAMENTE[/yellow]")
+                    return {
+                        'estado': 'descartado',
+                        'razones': ['rostro detectado'],
+                        'has_face': True,
+                        'face_details': face_analysis.get('details', []),
+                        'analysis_time_ms': analysis_time,
+                        'video_info': video_info
+                    }
+                else:
+                    console.print("    [green]✓ Sin rostros detectados[/green]")
+            else:
+                face_analysis = {'has_face': False, 'details': []}
+            
+            # FILTRO 2: Análisis de texto (solo si no hay rostros y está activo)
+            if filters.get('text', True):
+                console.print("    [blue]Detectando texto...[/blue]")
+                text_analysis = self._analyze_text(path, sample_strategy)
+                
+                if text_analysis.get('has_text', False):
+                    # DESCARTO INMEDIATO
+                    analysis_time = int((time.time() - start_time) * 1000)
+                    console.print("    [yellow]⚠️  Texto detectado - DESCARTANDO INMEDIATAMENTE[/yellow]")
+                    return {
+                        'estado': 'descartado',
+                        'razones': ['texto detectado'],
+                        'has_text': True,
+                        'text_details': text_analysis.get('details', []),
+                        'analysis_time_ms': analysis_time,
+                        'video_info': video_info
+                    }
+                else:
+                    console.print("    [green]✓ Sin texto detectado[/green]")
+            else:
+                text_analysis = {'has_text': False, 'details': []}
+            
+            # VIDEO ACEPTADO
+            analysis_time = int((time.time() - start_time) * 1000)
+            console.print(f"    [green]✓ Video ACEPTADO - Análisis completado en {analysis_time}ms[/green]")
+            
+            return {
+                'estado': 'aceptado',
+                'has_face': face_analysis.get('has_face', False),
+                'face_details': face_analysis.get('details', []),
+                'has_text': text_analysis.get('has_text', False),
+                'text_details': text_analysis.get('details', []),
+                'analysis_time_ms': analysis_time,
+                'video_info': video_info,
+                'sample_strategy': sample_strategy
+            }
+            
+        except Exception as e:
+            console.print(f"    [red]✗ Error analizando video: {str(e)}[/red]")
+            return {
+                'estado': 'descartado',
+                'razones': [f'error: {str(e)}'],
+                'analysis_time_ms': int((time.time() - start_time) * 1000)
+            }
+    
     def _get_video_info(self, path: str) -> Dict:
         """
         Obtiene información básica del video

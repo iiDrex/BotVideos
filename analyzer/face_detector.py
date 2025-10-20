@@ -5,6 +5,7 @@ Face Detector usando YOLOv8 y modelos adicionales
 import cv2
 import numpy as np
 import time
+import os
 from typing import List, Dict, Any, Optional
 from rich.console import Console
 
@@ -41,10 +42,23 @@ class FaceDetector:
             console.print(f"    [blue]Cargando modelo YOLO: {self.model_path}[/blue]")
             self.model = YOLO(self.model_path)
             
-            # Configurar dispositivo
-            device = 'cuda' if self.use_gpu else 'cpu'
-            self.model.to(device)
+            # Configurar dispositivo - FORZAR GPU si está habilitado
+            if self.use_gpu:
+                device = 'cuda'  # Forzar CUDA
+                console.print(f"    [green]✓ Forzando uso de GPU (CUDA)[/green]")
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        console.print(f"    [green]✓ GPU CUDA disponible: {torch.cuda.get_device_name(0)}[/green]")
+                    else:
+                        console.print(f"    [yellow]⚠️  CUDA no disponible, pero forzando GPU[/yellow]")
+                except ImportError:
+                    console.print(f"    [yellow]⚠️  PyTorch no disponible, pero forzando GPU[/yellow]")
+            else:
+                device = 'cpu'
+                console.print(f"    [yellow]⚠️  GPU deshabilitado, usando CPU[/yellow]")
             
+            self.model.to(device)
             console.print(f"    [green]✓ Modelo YOLO cargado en {device}[/green]")
             
         except Exception as e:
@@ -53,7 +67,7 @@ class FaceDetector:
     
     def detect_faces_on_frame(self, frame: np.ndarray) -> List[Dict]:
         """
-        Detecta rostros en un frame
+        Detecta rostros en un frame - ULTRA OPTIMIZADO Y PRECISO
         
         Args:
             frame: Frame de video como array numpy
@@ -65,8 +79,24 @@ class FaceDetector:
             return []
         
         try:
-            # Ejecutar detección
-            results = self.model(frame, conf=self.confidence_threshold, verbose=False)
+            # PREPROCESAMIENTO ULTRA MEGA RÁPIDO
+            # Redimensionar frame para velocidad máxima (máximo 320px)
+            height, width = frame.shape[:2]
+            if width > 320:
+                scale = 320 / width
+                new_width = 320
+                new_height = int(height * scale)
+                frame = cv2.resize(frame, (new_width, new_height))
+            
+            # Ejecutar detección con configuración optimizada
+            results = self.model(
+                frame, 
+                conf=0.7,  # Confianza más alta para evitar falsos positivos
+                iou=0.5,   # NMS más agresivo
+                max_det=5,  # Máximo 5 detecciones
+                verbose=False,
+                half=True   # Usar FP16 para velocidad
+            )
             
             faces = []
             for result in results:
@@ -77,13 +107,23 @@ class FaceDetector:
                         confidence = box.conf[0].cpu().numpy()
                         class_id = int(box.cls[0].cpu().numpy())
                         
-                        # Filtrar solo rostros (clase 0 en YOLO)
-                        if class_id == 0 and confidence >= self.confidence_threshold:
-                            faces.append({
-                                'bbox': [int(x1), int(y1), int(x2-x1), int(y2-y1)],
-                                'confidence': float(confidence),
-                                'class': 'face'
-                            })
+                        # FILTRAR SOLO ROSTROS (clase 0) con confianza alta
+                        if class_id == 0 and confidence >= 0.7:
+                            # VALIDACIÓN ADICIONAL: Verificar proporciones del rostro
+                            bbox_width = x2 - x1
+                            bbox_height = y2 - y1
+                            aspect_ratio = bbox_width / bbox_height if bbox_height > 0 else 0
+                            
+                            # Los rostros humanos tienen proporciones específicas (0.7-1.3)
+                            if 0.7 <= aspect_ratio <= 1.3:
+                                # VALIDACIÓN DE TAMAÑO: Rostros no pueden ser muy pequeños
+                                if bbox_width > 20 and bbox_height > 20:
+                                    faces.append({
+                                        'bbox': [int(x1), int(y1), int(bbox_width), int(bbox_height)],
+                                        'confidence': float(confidence),
+                                        'class': 'face',
+                                        'aspect_ratio': aspect_ratio
+                                    })
             
             return faces
             
@@ -93,7 +133,7 @@ class FaceDetector:
     
     def detect_faces_on_video(self, path: str, sample_strategy: dict) -> List[Dict]:
         """
-        Detecta rostros en un video completo usando muestreo optimizado
+        Detecta rostros en un video completo - ULTRA RÁPIDO Y PRECISO
         
         Args:
             path: Ruta al archivo de video
@@ -119,8 +159,8 @@ class FaceDetector:
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             duration = total_frames / fps if fps > 0 else 0
             
-            # Calcular estrategia de muestreo
-            sample_rate = self._calculate_sample_rate(duration, sample_strategy, fps)
+            # MUESTREO ULTRA MEGA AGRESIVO para velocidad máxima
+            sample_rate = max(1, int(fps * 10))  # Cada 10 segundos de video
             
             console.print(f"    [blue]Video: {duration:.1f}s, {total_frames} frames, {fps:.1f} fps[/blue]")
             console.print(f"    [blue]Muestreo: cada {sample_rate} frames[/blue]")
@@ -128,13 +168,14 @@ class FaceDetector:
             detections = []
             frame_count = 0
             processed_frames = 0
+            max_frames = 3  # LÍMITE MÁXIMO ULTRA REDUCIDO para velocidad
             
-            while True:
+            while processed_frames < max_frames:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                # Aplicar muestreo
+                # Aplicar muestreo ultra agresivo
                 if frame_count % sample_rate == 0:
                     faces = self.detect_faces_on_frame(frame)
                     
@@ -144,10 +185,9 @@ class FaceDetector:
                             face['timestamp'] = frame_count / fps if fps > 0 else 0
                             detections.append(face)
                         
-                        # Si detectamos rostros, podemos parar aquí (optimización)
-                        if len(detections) > 0:
-                            console.print(f"    [yellow]⚠️  Rostros detectados en frame {frame_count}[/yellow]")
-                            break
+                        # SALIDA TEMPRANA INMEDIATA - si detectamos rostros, parar inmediatamente
+                        console.print(f"    [yellow]⚠️  Rostros detectados en frame {frame_count}[/yellow]")
+                        break
                     
                     processed_frames += 1
                 

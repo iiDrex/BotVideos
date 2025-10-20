@@ -6,6 +6,7 @@ Coordina scrapers, downloader y analyzer
 import os
 import json
 import time
+import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any
 from rich.console import Console
@@ -36,7 +37,7 @@ def run_job(config: dict) -> List[Dict]:
     Returns:
         Lista de resultados finales
     """
-    console.print("[bold blue]Iniciando VideoFinder AI Bot[/bold blue]")
+    console.print("[bold cyan]Iniciando VideoFinder AI Bot[/bold cyan]")
     
     # Crear directorios necesarios
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -87,60 +88,49 @@ def run_job(config: dict) -> List[Dict]:
             console.print("[yellow]No se encontraron candidatos. Terminando.[/yellow]")
             return []
         
-        # Paso 2: Pre-filtrar por metadatos (ligero primero)
-        console.print("\n[bold yellow]Pre-filtrando por metadatos...[/bold yellow]")
+        # Paso 2: Pre-filtrar por metadatos ULTRA RÁPIDO (sin llamadas a APIs)
+        console.print("\n[bold yellow]Pre-filtrando por metadatos (ultra rápido)...[/bold yellow]")
         metadata_pass = []
         results = []
         
-        with Progress() as progress:
-            task = progress.add_task("Pre-filtrando...", total=len(candidates))
-            
-            for candidate in candidates:
-                try:
-                    url = candidate.get('url', '')
-                    # 1) Ruta rápida: solo duración y resolución
-                    basic = get_basic_duration_and_resolution(url)
-                    # 2) Si falla o faltan datos, ruta completa
-                    metadata = basic or get_video_metadata(url) or {}
-                    if not metadata:
-                        results.append(create_result(
-                            candidate, metadata, "descartado", 
-                            ["error obteniendo metadatos"]
-                        ))
-                        progress.update(task, advance=1)
-                        continue
-                    
-                    # Verificar orientación vertical
-                    if config['filters'].get('vertical', True):
-                        if not is_vertical(metadata):
+        # FILTRADO ULTRA RÁPIDO - sin barra de progreso
+        for candidate in candidates:
+            try:
+                # USAR SOLO INFORMACIÓN YA DISPONIBLE DE LOS SCRAPERS
+                # No hacer llamadas adicionales a APIs
+                
+                # Verificar orientación vertical usando información del scraper
+                if config['filters'].get('vertical', True):
+                    width = candidate.get('width', 0)
+                    height = candidate.get('height', 0)
+                    if width > 0 and height > 0:
+                        if not (height > width):  # No es vertical
                             results.append(create_result(
-                                candidate, metadata, "descartado",
+                                candidate, candidate, "descartado",
                                 ["orientacion horizontal"]
                             ))
-                            progress.update(task, advance=1)
                             continue
-                    
-                    # Verificar duración
-                    if not duration_in_range(metadata.get('duration', 0), config['duration_range']):
+                
+                # Verificar duración usando información del scraper
+                duration = candidate.get('duration', 0)
+                if duration > 0:
+                    if not duration_in_range(duration, config['duration_range']):
                         results.append(create_result(
-                            candidate, metadata, "descartado",
+                            candidate, candidate, "descartado",
                             ["duracion fuera de rango"]
                         ))
-                        progress.update(task, advance=1)
                         continue
-                    
-                    # Pasar al siguiente paso
-                    candidate_with_meta = {**candidate, **metadata}
-                    metadata_pass.append(candidate_with_meta)
-                    progress.update(task, advance=1)
-                    
-                except Exception as e:
-                    console.print(f"[red]Error procesando candidato: {str(e)}[/red]")
-                    results.append(create_result(
-                        candidate, {}, "descartado",
-                        [f"error: {str(e)}"]
-                    ))
-                    progress.update(task, advance=1)
+                
+                # Si no tenemos información suficiente, pasar al siguiente paso
+                # (se verificará durante el análisis de video)
+                metadata_pass.append(candidate)
+                
+            except Exception as e:
+                console.print(f"[red]Error procesando candidato: {str(e)}[/red]")
+                results.append(create_result(
+                    candidate, candidate, "descartado",
+                    [f"error: {str(e)}"]
+                ))
         
         console.print(f"[green]Candidatos que pasaron pre-filtro: {len(metadata_pass)}[/green]")
         
@@ -149,66 +139,79 @@ def run_job(config: dict) -> List[Dict]:
             save_results(results)
             return results
         
-        # Paso 3: Descargar y analizar videos
-        console.print("\n[bold yellow]Descargando y analizando videos...[/bold yellow]")
+        # Paso 3: Descargar y analizar videos - PROCESAMIENTO EN PARALELO ULTRA RÁPIDO
+        console.print("\n[bold yellow]Descargando y analizando videos (paralelo ultra rápido)...[/bold yellow]")
         
-        with Progress() as progress:
-            task = progress.add_task("Analizando...", total=len(metadata_pass))
-            
-            for item in metadata_pass:
-                try:
-                    # Descargar video temporal
-                    temp_path = downloader.download_temporal(item['url'])
-                    if not temp_path:
-                        results.append(create_result(
-                            item, item, "descartado",
-                            ["error descarga"]
-                        ))
-                        progress.update(task, advance=1)
-                        continue
-                    
-                    # Analizar video
-                    analysis = analyzer.analyze_video(temp_path)
-                    
-                    # Aplicar filtros
-                    razones = []
-                    
-                    # Filtro de rostros
-                    if config['filters'].get('faces', True) and analysis.get('has_face', False):
-                        razones.append("rostro detectado")
-                        results.append(create_result(
-                            item, item, "descartado", razones, analysis
-                        ))
-                        downloader.remove(temp_path)
-                        progress.update(task, advance=1)
-                        continue
-                    
-                    # Filtro de texto
-                    if config['filters'].get('text', True) and analysis.get('has_text', False):
-                        razones.append("texto detectado")
-                        results.append(create_result(
-                            item, item, "descartado", razones, analysis
-                        ))
-                        downloader.remove(temp_path)
-                        progress.update(task, advance=1)
-                        continue
-                    
-                    # Video aceptado
-                    results.append(create_result(
-                        item, item, "aceptado", [], analysis
-                    ))
-                    downloader.remove(temp_path)
-                    progress.update(task, advance=1)
-                    
-                except Exception as e:
-                    console.print(f"[red]Error analizando video: {str(e)}[/red]")
-                    results.append(create_result(
+        # PROCESAMIENTO EN PARALELO para velocidad máxima
+        import concurrent.futures
+        import threading
+        
+        def process_single_video(item):
+            """Procesa un solo video de forma optimizada"""
+            try:
+                # Descargar video temporal
+                temp_path = downloader.download_temporal(item['url'])
+                if not temp_path:
+                    return create_result(
                         item, item, "descartado",
-                        [f"error: {str(e)}"]
-                    ))
-                    if 'temp_path' in locals():
-                        downloader.remove(temp_path)
-                    progress.update(task, advance=1)
+                        ["error descarga"]
+                    )
+                
+                # Analizar video con filtros optimizados
+                analysis = analyzer.analyze_video_optimized(temp_path, config['filters'])
+                
+                # Limpiar archivo temporal inmediatamente
+                downloader.remove(temp_path)
+                
+                # Si el análisis retorna un resultado directo (descartado), usarlo
+                if analysis.get('estado') == 'descartado':
+                    return create_result(
+                        item, item, "descartado", 
+                        analysis.get('razones', []), analysis
+                    )
+                
+                # Video aceptado
+                return create_result(
+                    item, item, "aceptado", [], analysis
+                )
+                
+            except Exception as e:
+                return create_result(
+                    item, item, "descartado",
+                    [f"error: {str(e)}"]
+                )
+        
+        # PROCESAR EN PARALELO - máximo 8 videos simultáneos para búsqueda masiva
+        max_workers = min(8, len(metadata_pass))
+        results = []
+        
+        # LIMPIEZA DE MEMORIA antes del procesamiento paralelo
+        import gc
+        gc.collect()
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Enviar todos los trabajos
+            future_to_item = {
+                executor.submit(process_single_video, item): item 
+                for item in metadata_pass
+            }
+            
+            # Recoger resultados conforme se completan
+            with Progress() as progress:
+                task = progress.add_task("Analizando...", total=len(metadata_pass))
+                
+                for future in concurrent.futures.as_completed(future_to_item):
+                    try:
+                        result = future.result()
+                        results.append(result)
+                        progress.update(task, advance=1)
+                        
+                        # LIMPIEZA DE MEMORIA después de cada video
+                        gc.collect()
+                        
+                    except Exception as e:
+                        console.print(f"[red]Error en procesamiento paralelo: {str(e)}[/red]")
+                        progress.update(task, advance=1)
         
         # Paso 4: Guardar resultados
         console.print("\n[bold yellow]Guardando resultados...[/bold yellow]")
@@ -257,27 +260,50 @@ def create_result(candidate: dict, metadata: dict, estado: str, razones: list, a
 
 def save_results(results: List[Dict]):
     """Guarda los resultados en JSON y genera lista aceptada"""
+    # Convertir todos los valores float32 a float para evitar errores de serialización
+    def convert_float32(obj):
+        if isinstance(obj, dict):
+            return {k: convert_float32(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_float32(item) for item in obj]
+        elif hasattr(obj, 'item'):  # numpy/torch tensors
+            return float(obj.item())
+        elif isinstance(obj, (np.float32, np.float64)):
+            return float(obj)
+        else:
+            return obj
+    
+    # Aplicar conversión a todos los resultados
+    results_clean = convert_float32(results)
+    
     # Guardar JSON completo
     with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(results_clean, f, indent=2, ensure_ascii=False)
     
     # Generar lista aceptada
-    accepted = [r for r in results if r.get('estado') == 'aceptado']
+    accepted = [r for r in results_clean if r.get('estado') == 'aceptado']
     
     with open(ACCEPTED_LIST, 'w', encoding='utf-8') as f:
-        f.write("==============================\n")
-        f.write("✅ VIDEOS QUE PASARON LOS FILTROS\n")
-        f.write("==============================\n\n")
+        f.write("=" * 60 + "\n")
+        f.write("✅ VIDEOS ACEPTADOS - LISTA COMPLETA\n")
+        f.write("=" * 60 + "\n\n")
         
-        for i, video in enumerate(accepted, 1):
-            f.write(f"{i}) \"{video['titulo']}\"\n")
-            f.write(f"   • Enlace: {video['enlace']}\n")
-            f.write(f"   • Duración: {video['duracion_sec']} s\n")
-            f.write(f"   • Resolución: {video['resolution']}\n")
-            f.write(f"   • Plataforma: {video['platform'].title()}\n\n")
+        if not accepted:
+            f.write("❌ No se encontraron videos que cumplan los criterios.\n")
+        else:
+            f.write(f"📊 Total de videos aceptados: {len(accepted)}\n\n")
+            
+            for i, video in enumerate(accepted, 1):
+                f.write(f"{i:2d}) 📹 \"{video['titulo']}\"\n")
+                f.write(f"     🔗 Enlace: {video['enlace']}\n")
+                f.write(f"     ⏱️  Duración: {video['duracion_sec']} segundos\n")
+                f.write(f"     📐 Resolución: {video['resolution']}\n")
+                f.write(f"     🌐 Plataforma: {video['platform'].title()}\n")
+                f.write(f"     📅 Procesado: {video['processed_at']}\n\n")
     
     console.print(f"[green]Resultados guardados en: {OUTPUT_JSON}")
     console.print(f"[green]Lista aceptada guardada en: {ACCEPTED_LIST}")
+    console.print(f"[green]Total videos aceptados: {len(accepted)}")
 
 def show_summary(results: List[Dict]):
     """Muestra resumen de resultados en consola"""
@@ -285,8 +311,8 @@ def show_summary(results: List[Dict]):
     discarded = [r for r in results if r.get('estado') == 'descartado']
     
     console.print("\n[bold green]==============================")
-    console.print("VIDEOS QUE PASARON LOS FILTROS")
-    console.print("==============================[/bold green]")
+    console.print("[bold green]VIDEOS QUE PASARON LOS FILTROS[/bold green]")
+    console.print("[bold green]==============================[/bold green]")
     
     if not accepted:
         console.print("[yellow]Ningún video pasó todos los filtros.[/yellow]")

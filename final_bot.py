@@ -28,7 +28,7 @@ def print_banner():
               Automatizador de Contenido Vertical            
                     Sin Rostros ni Texto                     
 ============================================================"""
-    console.print(Panel(banner, style="bold blue"))
+    console.print(Panel(banner, style="bold cyan"))
 
 def validate_keyword(keyword: str) -> str:
     """Valida la palabra clave de búsqueda"""
